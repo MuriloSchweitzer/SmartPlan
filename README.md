@@ -1,92 +1,83 @@
 # SmartPlan
 
-Aplicação web de planejamento inteligente do tempo. O sistema organiza tarefas fixas e flexíveis nos períodos livres do usuário, calcula prioridades, monta a agenda semanal e registra o tempo realmente utilizado.
+Versão web completa da Sprint3, mantendo a identidade visual e as regras do aplicativo iniciado por `Sprint3/executar-smartplan.cmd`.
 
-O frontend React reproduz a estrutura visual do aplicativo WPF iniciado por `Sprint3/executar-smartplan.cmd`: card central de autenticação, sidebar fixa, cards, formulários e grade horária semanal.
-
-## Arquitetura
+## Estrutura
 
 ```text
 SmartPlan/
-├── frontend/   React 19 + Vite
-├── backend/    API REST Node.js + Express
-├── database/   PostgreSQL: migrações e scripts
-└── docker-compose.yml
+├── frontend/             React 19 + Vite
+├── backend/              C# + ASP.NET Core 6
+├── database/             PostgreSQL 17
+├── docker-compose.yml    Banco e API em contêineres separados
+└── executar-smartplan.cmd
 ```
 
-As três camadas são independentes:
+O frontend, o backend e o banco são camadas independentes:
 
 ```text
-Navegador (React) ──HTTPS──> API (Express) ──SQL──> PostgreSQL
+React ──HTTPS──> ASP.NET Core ──SQL──> PostgreSQL
 ```
 
-- O frontend nunca acessa o banco diretamente.
-- O backend valida a sessão e garante que cada usuário acesse apenas seus dados.
-- O PostgreSQL mantém usuários, categorias, tarefas, disponibilidades, agenda e histórico em tabelas relacionais.
+## Funcionalidades preservadas
 
-## Funcionalidades
-
-- Cadastro, login e alteração de senha com PBKDF2 e salt.
-- Categorias personalizadas por usuário.
+- Cadastro, login, perfil e alteração de senha.
+- Categorias personalizadas.
 - Tarefas fixas e flexíveis com prazo, duração, criticidade e impacto.
-- Prioridade calculada por `0,4 × criticidade + 0,4 × urgência + 0,2 × impacto`.
-- Disponibilidade semanal recorrente.
-- Planejamento automático da agenda, preservando blocos manuais.
-- Registro de execução e comparação entre tempo estimado e tempo real.
-- Dashboard, agenda semanal, prioridades, histórico e configurações.
-- Layout responsivo para desktop e celular.
+- Prioridade por `0,4 × criticidade + 0,4 × urgência + 0,2 × impacto`.
+- Disponibilidade recorrente e planejamento automático semanal.
+- Movimentação manual dos blocos da agenda com validação de conflitos.
+- Registro de execução e histórico de tempo estimado versus realizado.
+- Dashboard, agenda, prioridades, tarefas, disponibilidade, histórico e configurações.
+- Mesma estrutura visual React já reproduzida a partir da Sprint3.
 
-## Execução local
+## Executar no Windows
 
-Pré-requisitos: Node.js 22+, npm e Docker.
+Com .NET 6 SDK, Node.js 22+ e PostgreSQL disponíveis, execute:
+
+```powershell
+.\executar-smartplan.cmd
+```
+
+Se o Docker estiver instalado, o script inicia o PostgreSQL automaticamente. Caso contrário, ele usa o PostgreSQL local configurado em `backend/.env`.
+
+- Aplicação: `http://localhost:5173`
+- API C#: `http://localhost:8080`
+- Health check: `http://localhost:8080/api/health`
+- PostgreSQL: `localhost:5432`
+
+Execução manual:
 
 ```powershell
 docker compose up -d postgres
 Copy-Item backend/.env.example backend/.env
 Copy-Item frontend/.env.example frontend/.env
 npm install
-npm run db:migrate
 npm run dev
 ```
 
-- Frontend: `http://localhost:5173`
-- Backend: `http://localhost:8080`
-- Health check: `http://localhost:8080/api/health`
-- PostgreSQL: `localhost:5432`
-
-Antes de usar fora do ambiente local, altere `JWT_SECRET` em `backend/.env`.
-
-## Testes e build
+## Validar
 
 ```powershell
 npm test
-npm run lint
 npm run build
 ```
 
-## Hospedagem
+## Hospedar
 
-### Frontend
+- **Frontend:** publique `frontend/` na Netlify ou Vercel e configure `VITE_API_URL=https://sua-api/api`.
+- **Backend:** publique a imagem de `backend/Dockerfile` em Render, Railway, Azure, AWS ou outro host com suporte a ASP.NET Core/Docker.
+- **Banco:** use PostgreSQL gerenciado e configure `DATABASE_URL` somente no backend.
 
-Use `frontend/` como diretório raiz na Vercel ou Netlify e configure:
-
-```text
-VITE_API_URL=https://sua-api.exemplo.com/api
-```
-
-### Backend
-
-Use `backend/` como diretório raiz em um serviço Node.js ou na Vercel. Configure:
+Variáveis obrigatórias do backend:
 
 ```text
-DATABASE_URL=postgresql://...
-JWT_SECRET=...
-FRONTEND_URL=https://seu-frontend.exemplo.com
-NODE_ENV=production
+DATABASE_URL=postgresql://usuario:senha@host:5432/banco
+JWT_SECRET=segredo-com-pelo-menos-32-caracteres
+FRONTEND_URL=https://seu-frontend.netlify.app
+ASPNETCORE_URLS=http://0.0.0.0:8080
 ```
 
-### PostgreSQL
+A API aplica automaticamente `database/migrations/001_initial_schema.sql` ao iniciar. O banco nunca é acessado diretamente pelo React.
 
-O banco pode ser hospedado em Neon, Supabase, Railway ou outro provedor PostgreSQL. Execute `npm run db:migrate` apontando `DATABASE_URL` para a instância criada.
-
-Consulte [docs/ARQUITETURA.md](docs/ARQUITETURA.md) para detalhes das camadas e regras de negócio.
+Consulte `docs/ARQUITETURA.md` para os detalhes das camadas e regras.

@@ -1,26 +1,26 @@
 # Arquitetura do SmartPlan
 
-## Separação das camadas
+## Camadas separadas
 
-### Frontend
+### Frontend React
 
-Aplicação React responsável exclusivamente pela interface, navegação e estado da sessão. Toda persistência usa a API configurada em `VITE_API_URL`.
+Responsável somente pela interface, navegação, gráficos e estado da sessão. Preserva o layout, os componentes e a experiência visual da Sprint3. Toda persistência passa por `VITE_API_URL`.
 
-### Backend
+### Backend C#
 
-API REST Express responsável por:
+API REST ASP.NET Core responsável por:
 
-- autenticação e sessões assinadas;
-- autorização por usuário;
-- validação dos dados;
-- regras de tarefas e histórico;
+- autenticação e tokens de sessão assinados;
+- autorização e isolamento por usuário;
+- validação de dados;
+- regras de tarefas, categorias, agenda e histórico;
 - cálculo de prioridade;
 - geração determinística da agenda;
-- transações com o PostgreSQL.
+- transações e migrações PostgreSQL.
 
-### Banco de dados
+### PostgreSQL
 
-O PostgreSQL é uma camada separada e não contém lógica de interface. Restrições, chaves estrangeiras e índices garantem integridade mesmo quando a API recebe requisições concorrentes.
+Camada de dados independente. Restrições, chaves estrangeiras e índices garantem integridade; nenhuma credencial do banco é enviada ao navegador.
 
 ## Modelo relacional
 
@@ -33,22 +33,22 @@ users
  └── availability
 ```
 
-Todas as entidades pertencentes a um usuário carregam `user_id`. Exclusões de conta e tarefas usam cascata; categorias vinculadas a tarefas não podem ser removidas.
+Todas as entidades do usuário possuem `user_id`. Exclusões de usuário e tarefas usam cascata; categorias vinculadas a tarefas são protegidas.
 
 ## Planejamento semanal
 
-1. Remove blocos automáticos da semana e preserva blocos manuais.
+1. Remove os blocos automáticos da semana e preserva os manuais.
 2. Reserva tarefas fixas nos horários definidos.
-3. Ordena tarefas flexíveis pela prioridade calculada.
-4. Expande a disponibilidade recorrente para os sete dias da semana.
-5. Subtrai blocos ocupados e distribui o tempo restante em intervalos mínimos de 15 minutos.
+3. Ordena tarefas flexíveis pela prioridade.
+4. Expande a disponibilidade recorrente para os sete dias.
+5. Subtrai horários ocupados e distribui o tempo restante em blocos mínimos de 15 minutos.
 6. Informa quantas tarefas não couberam integralmente.
 
 ## Segurança
 
-- Senhas derivadas com PBKDF2-HMAC-SHA512, 210 mil iterações e salt individual.
-- Tokens de sessão assinados com HMAC-SHA256 e validade de 30 dias.
-- CORS restrito ao domínio informado em `FRONTEND_URL`.
-- Helmet aplica cabeçalhos HTTP defensivos.
-- Consultas parametrizadas impedem injeção de SQL.
-- O backend sempre filtra consultas e mutações por `user_id`.
+- PBKDF2-HMAC-SHA512 com 210 mil iterações e salt individual.
+- Compatibilidade de login com hashes PBKDF2-SHA256 da Sprint3 original.
+- Tokens HMAC-SHA256 com validade de 30 dias.
+- CORS limitado a `FRONTEND_URL`.
+- SQL parametrizado em todas as operações.
+- Filtro obrigatório por `user_id` nas consultas e alterações.

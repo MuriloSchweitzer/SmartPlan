@@ -8,6 +8,10 @@ coverage/
 .DS_Store
 .idea/
 .vscode/
+bin/
+obj/
+*.user
+*.suo
 
 # Local Netlify folder
 .netlify

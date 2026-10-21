@@ -3,15 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "frontend",
-    "backend"
+    "frontend"
   ],
   "scripts": {
-    "dev": "concurrently -n API,WEB -c cyan,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
-    "build": "npm run build -w frontend",
-    "lint": "npm run lint -w backend && npm run lint -w frontend",
-    "test": "npm run test -w backend",
-    "db:migrate": "npm run db:migrate -w backend"
+    "dev": "concurrently -n API,WEB -c cyan,magenta \"dotnet run --project backend/SmartPlan.Api.csproj\" \"npm run dev -w frontend\"",
+    "build": "dotnet build backend/SmartPlan.Api.csproj --configuration Release && npm run build -w frontend",
+    "lint": "npm run lint -w frontend",
+    "test": "dotnet build backend/SmartPlan.Api.csproj --configuration Release && npm run lint -w frontend",
+    "db:migrate": "dotnet run --project backend/SmartPlan.Api.csproj -- --migrate-only"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
