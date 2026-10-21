@@ -6,6 +6,7 @@ import { loadProfile } from '../profile.js';
 import { hashPassword, verifyPassword } from '../security.js';
 import {
   availabilitySchema,
+  agendaMoveSchema,
   categorySchema,
   historySchema,
   parse,
@@ -41,7 +42,11 @@ router.get('/', asyncRoute(async (request, response) => {
 
 router.put('/', asyncRoute(async (request, response) => {
   const input = parse(profileSchema, request.body);
-  await pool.query('UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2', [input.name, request.userId]);
+  if (input.newPassword) {
+    await pool.query('UPDATE users SET name = $1, password_hash = $2, updated_at = NOW() WHERE id = $3', [input.name, hashPassword(input.newPassword), request.userId]);
+  } else {
+    await pool.query('UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2', [input.name, request.userId]);
+  }
   await respondWithProfile(response, request.userId);
 }));
 
@@ -58,6 +63,13 @@ router.post('/categories', asyncRoute(async (request, response) => {
   const input = parse(categorySchema, request.body);
   await pool.query('INSERT INTO categories(user_id, name, color) VALUES ($1, $2, $3)', [request.userId, input.name, input.color]);
   await respondWithProfile(response, request.userId, 201);
+}));
+
+router.put('/categories/:id', asyncRoute(async (request, response) => {
+  const input = parse(categorySchema, request.body);
+  const result = await pool.query('UPDATE categories SET name = $1, color = $2 WHERE id = $3 AND user_id = $4', [input.name, input.color, request.params.id, request.userId]);
+  if (!result.rowCount) throw httpError(404, 'Categoria não encontrada.');
+  await respondWithProfile(response, request.userId);
 }));
 
 router.delete('/categories/:id', asyncRoute(async (request, response) => {
@@ -107,6 +119,16 @@ router.post('/tasks/:id/complete', asyncRoute(async (request, response) => {
   await respondWithProfile(response, request.userId);
 }));
 
+router.post('/tasks/:id/cancel', asyncRoute(async (request, response) => {
+  await transaction(async (client) => {
+    const task = await assertOwnedTask(client, request.userId, request.params.id);
+    if (['completed', 'cancelled'].includes(task.status)) throw httpError(400, 'A tarefa já foi finalizada.');
+    await client.query("UPDATE tasks SET status='cancelled' WHERE id=$1", [task.id]);
+    await client.query('DELETE FROM agenda_blocks WHERE task_id=$1 AND starts_at >= NOW()', [task.id]);
+  });
+  await respondWithProfile(response, request.userId);
+}));
+
 router.delete('/tasks/:id', asyncRoute(async (request, response) => {
   const result = await pool.query('DELETE FROM tasks WHERE id=$1 AND user_id=$2', [request.params.id, request.userId]);
   if (!result.rowCount) throw httpError(404, 'Tarefa não encontrada.');
@@ -141,7 +163,12 @@ router.post('/history', asyncRoute(async (request, response) => {
       INSERT INTO task_history(user_id, task_id, started_at, ended_at, duration_minutes)
       VALUES ($1,$2,$3,$4,$5)
     `, [request.userId, task.id, input.start, input.end, duration]);
-    if (task.status === 'pending') await client.query("UPDATE tasks SET status='ongoing' WHERE id=$1", [task.id]);
+    if (input.complete) {
+      await client.query("UPDATE tasks SET status='completed', completed_at=NOW() WHERE id=$1", [task.id]);
+      await client.query('DELETE FROM agenda_blocks WHERE task_id=$1 AND starts_at >= NOW()', [task.id]);
+    } else if (task.status === 'pending') {
+      await client.query("UPDATE tasks SET status='ongoing' WHERE id=$1", [task.id]);
+    }
   });
   await respondWithProfile(response, request.userId, 201);
 }));
@@ -156,6 +183,43 @@ router.post('/agenda/recalculate', asyncRoute(async (request, response) => {
   const input = parse(recalculateSchema, request.body);
   const result = await transaction((client) => recalculateAgenda(client, request.userId, input.weekStart));
   await respondWithProfile(response, request.userId, 200, result);
+}));
+
+router.put('/agenda/:id/move', asyncRoute(async (request, response) => {
+  const input = parse(agendaMoveSchema, request.body);
+  await transaction(async (client) => {
+    const result = await client.query(`
+      SELECT ab.*, t.deadline, t.mode
+      FROM agenda_blocks ab
+      JOIN tasks t ON t.id = ab.task_id
+      WHERE ab.id = $1 AND ab.user_id = $2
+    `, [request.params.id, request.userId]);
+    if (!result.rowCount) throw httpError(404, 'Bloco da agenda não encontrado.');
+    const block = result.rows[0];
+    const start = new Date(input.start);
+    const end = new Date(start.getTime() + new Date(block.ends_at).getTime() - new Date(block.starts_at).getTime());
+    if (start < new Date()) throw httpError(400, 'Não é possível mover uma tarefa para um horário que já passou.');
+    if (end > new Date(block.deadline)) throw httpError(400, 'O novo horário ultrapassa o prazo da tarefa.');
+    const window = await client.query(`
+      SELECT id FROM availability
+      WHERE user_id = $1
+        AND weekday = EXTRACT(ISODOW FROM timezone('America/Sao_Paulo', $2::timestamptz))
+        AND start_time <= timezone('America/Sao_Paulo', $2::timestamptz)::time
+        AND end_time >= timezone('America/Sao_Paulo', $3::timestamptz)::time
+      LIMIT 1
+    `, [request.userId, start.toISOString(), end.toISOString()]);
+    if (!window.rowCount) throw httpError(400, 'Solte a tarefa dentro de um período disponível.');
+    const conflict = await client.query(`
+      SELECT 1 FROM agenda_blocks
+      WHERE user_id=$1 AND id<>$2 AND status NOT IN ('cancelled','missed')
+        AND $3::timestamptz < ends_at AND starts_at < $4::timestamptz
+      LIMIT 1
+    `, [request.userId, block.id, start.toISOString(), end.toISOString()]);
+    if (conflict.rowCount) throw httpError(400, 'Este horário já está ocupado por outra tarefa.');
+    await client.query("UPDATE agenda_blocks SET starts_at=$1, ends_at=$2, status='manual', manual=TRUE WHERE id=$3", [start.toISOString(), end.toISOString(), block.id]);
+    if (block.mode === 'fixed') await client.query('UPDATE tasks SET fixed_start=$1, fixed_end=$2 WHERE id=$3', [start.toISOString(), end.toISOString(), block.task_id]);
+  });
+  await respondWithProfile(response, request.userId);
 }));
 
 export default router;

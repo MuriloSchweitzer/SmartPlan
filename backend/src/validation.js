@@ -15,7 +15,12 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 
-export const profileSchema = z.object({ name: z.string().trim().min(2).max(120) });
+export const profileSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  newPassword: z.string().max(200).optional().default(''),
+}).refine((value) => !value.newPassword || value.newPassword.length >= 6, {
+  message: 'A nova senha deve ter pelo menos 6 caracteres.',
+});
 
 export const passwordSchema = z.object({
   currentPassword: z.string().min(1).max(200),
@@ -56,10 +61,16 @@ export const availabilitySchema = z.object({
   end: time,
 }).refine((value) => value.end > value.start, { message: 'O horário final deve ser posterior ao inicial.' });
 
-export const historySchema = z.object({ taskId: uuid, start: dateTime, end: dateTime })
+export const historySchema = z.object({
+  taskId: uuid,
+  start: dateTime,
+  end: dateTime,
+  complete: z.boolean().optional().default(false),
+})
   .refine((value) => new Date(value.end) > new Date(value.start), { message: 'O fim deve ser posterior ao início.' });
 
 export const recalculateSchema = z.object({ weekStart: dateTime });
+export const agendaMoveSchema = z.object({ start: dateTime });
 
 export function parse(schema, body) {
   const result = schema.safeParse(body);

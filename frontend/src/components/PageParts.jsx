@@ -1,11 +1,9 @@
-import Icon from './Icon.jsx';
-
 export function PageHead({ title, description, children }) {
   return <header className="page-head"><div><h1>{title}</h1><p>{description}</p></div>{children ? <div className="page-actions">{children}</div> : null}</header>;
 }
 
-export function EmptyState({ title, description, children }) {
-  return <div className="empty-state"><div className="empty-icon"><Icon name="calendar" /></div><strong>{title}</strong><p>{description}</p>{children}</div>;
+export function EmptyState({ children }) {
+  return <div className="empty-state">{children}</div>;
 }
 
 export function Toasts({ items }) {

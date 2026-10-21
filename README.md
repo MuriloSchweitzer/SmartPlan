@@ -2,6 +2,8 @@
 
 Aplicação web de planejamento inteligente do tempo. O sistema organiza tarefas fixas e flexíveis nos períodos livres do usuário, calcula prioridades, monta a agenda semanal e registra o tempo realmente utilizado.
 
+O frontend React reproduz a estrutura visual do aplicativo WPF iniciado por `Sprint3/executar-smartplan.cmd`: card central de autenticação, sidebar fixa, cards, formulários e grade horária semanal.
+
 ## Arquitetura
 
 ```text

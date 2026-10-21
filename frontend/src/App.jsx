@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import AuthScreen from './components/AuthScreen.jsx';
-import HistoryDialog from './components/HistoryDialog.jsx';
 import Layout from './components/Layout.jsx';
-import TaskDialog from './components/TaskDialog.jsx';
 import { Toasts } from './components/PageParts.jsx';
 import { addDays, startOfWeek } from './lib/format.js';
 import { routeTitles } from './lib/routes.js';
@@ -23,8 +21,7 @@ export default function App() {
   const [loading, setLoading] = useState(Boolean(getToken()));
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [taskDialog, setTaskDialog] = useState(undefined);
-  const [historyDialog, setHistoryDialog] = useState(null);
+  const [taskEditor, setTaskEditor] = useState(undefined);
   const [week, setWeek] = useState(() => startOfWeek(new Date()));
   const [toasts, setToasts] = useState([]);
 
@@ -62,6 +59,7 @@ export default function App() {
     location.hash = safeRoute;
     setRoute(safeRoute);
     setMenuOpen(false);
+    if (safeRoute !== 'tasks') setTaskEditor(undefined);
   }
 
   async function authenticate(type, credentials) {
@@ -69,14 +67,12 @@ export default function App() {
     setToken(data.token);
     setProfile(data.profile);
     navigate('dashboard');
-    toast(type === 'login' ? 'Bem-vindo de volta.' : 'Conta criada. Seu planejamento começa agora.');
   }
 
   function logout() {
     clearToken();
     setProfile(null);
     location.hash = '';
-    toast('Sessão encerrada.');
   }
 
   async function mutate(path, options, successMessage) {
@@ -95,37 +91,38 @@ export default function App() {
     }
   }
 
-  function openTask(task) {
+  function openTask(task = null) {
     if (!profile.categories.length) {
       toast('Crie uma categoria antes de cadastrar tarefas.', true);
       navigate('settings');
       return;
     }
-    setTaskDialog(task || null);
+    location.hash = 'tasks';
+    setRoute('tasks');
+    setTaskEditor(task);
   }
 
   async function saveTask(id, task) {
     await mutate(id ? `/profile/tasks/${id}` : '/profile/tasks', { method: id ? 'PUT' : 'POST', body: JSON.stringify(task) }, id ? 'Tarefa atualizada.' : 'Tarefa criada.');
+    setTaskEditor(undefined);
   }
 
-  if (loading) return <div className="boot-screen"><a className="brand">Smart<span>Plan</span></a><div className="boot-line" /></div>;
+  if (loading) return <div className="boot-screen"><strong>SmartPlan</strong></div>;
   if (!profile) return <><AuthScreen onAuthenticate={authenticate} /><Toasts items={toasts} /></>;
 
   const pageProps = { profile, onNavigate: navigate, onNewTask: openTask };
   const pages = {
     dashboard: <Dashboard {...pageProps} />,
-    tasks: <Tasks {...pageProps} onEdit={openTask} onHistory={setHistoryDialog} onComplete={(task) => mutate(`/profile/tasks/${task.id}/complete`, { method: 'POST' }, 'Tarefa concluída.')} onDelete={(task) => { if (confirm(`Excluir permanentemente "${task.title}" e todo o histórico relacionado?`)) mutate(`/profile/tasks/${task.id}`, { method: 'DELETE' }, 'Tarefa excluída.'); }} />,
-    agenda: <Agenda profile={profile} week={week} onWeek={(direction) => setWeek((value) => addDays(value, direction * 7))} onRecalculate={async () => { const data = await mutate('/profile/agenda/recalculate', { method: 'POST', body: JSON.stringify({ weekStart: week.toISOString() }) }); toast(data.unallocatedCount ? `Agenda recalculada. ${data.unallocatedCount} tarefa(s) ficaram sem espaço.` : 'Agenda recalculada.'); }} />,
-    availability: <Availability profile={profile} onAdd={(value) => mutate('/profile/availability', { method: 'POST', body: JSON.stringify(value) }, 'Disponibilidade adicionada.')} onDelete={(item) => mutate(`/profile/availability/${item.id}`, { method: 'DELETE' }, 'Disponibilidade removida.')} />,
-    priorities: <Priorities profile={profile} onNewTask={openTask} />,
-    history: <History profile={profile} onDelete={(item) => mutate(`/profile/history/${item.id}`, { method: 'DELETE' }, 'Registro removido.')} />,
-    settings: <Settings profile={profile} onProfile={(value) => mutate('/profile', { method: 'PUT', body: JSON.stringify(value) }, 'Perfil atualizado.')} onPassword={async (value) => { await mutate('/profile/password', { method: 'POST', body: JSON.stringify(value) }); toast('Senha alterada com segurança.'); }} onAddCategory={(value) => mutate('/profile/categories', { method: 'POST', body: JSON.stringify(value) }, 'Categoria adicionada.')} onDeleteCategory={(category) => mutate(`/profile/categories/${category.id}`, { method: 'DELETE' }, 'Categoria removida.')} />,
+    tasks: <Tasks {...pageProps} editorTask={taskEditor} onCloseEditor={() => setTaskEditor(undefined)} onEdit={openTask} onSave={saveTask} onComplete={(task) => mutate(`/profile/tasks/${task.id}/complete`, { method: 'POST' }, 'Tarefa concluída.')} onCancel={(task) => mutate(`/profile/tasks/${task.id}/cancel`, { method: 'POST' }, 'Tarefa cancelada.')} onDelete={(task) => { if (confirm(`Excluir permanentemente "${task.title}" e todo o histórico relacionado?`)) mutate(`/profile/tasks/${task.id}`, { method: 'DELETE' }, 'Tarefa excluída.'); }} />,
+    agenda: <Agenda profile={profile} week={week} onWeek={(direction) => setWeek((value) => addDays(value, direction * 7))} onSelectWeek={(value) => setWeek(startOfWeek(value))} onMove={(block, start) => mutate(`/profile/agenda/${block.id}/move`, { method: 'PUT', body: JSON.stringify({ start: start.toISOString() }) }, 'Bloco reagendado manualmente.')} onRecalculate={async () => { const data = await mutate('/profile/agenda/recalculate', { method: 'POST', body: JSON.stringify({ weekStart: week.toISOString() }) }); toast(data.unallocatedCount ? `Agenda recalculada. ${data.unallocatedCount} tarefa(s) ficaram sem espaço.` : 'Agenda recalculada.'); }} />,
+    availability: <Availability profile={profile} onAdd={(value) => mutate('/profile/availability', { method: 'POST', body: JSON.stringify(value) }, 'Disponibilidade salva.')} onDelete={(item) => mutate(`/profile/availability/${item.id}`, { method: 'DELETE' }, 'Disponibilidade removida.')} />,
+    priorities: <Priorities profile={profile} />,
+    history: <History profile={profile} onAdd={(value) => mutate('/profile/history', { method: 'POST', body: JSON.stringify(value) }, 'Execução registrada.')} />,
+    settings: <Settings profile={profile} onProfile={(value) => mutate('/profile', { method: 'PUT', body: JSON.stringify(value) }, 'Alterações salvas.')} onAddCategory={(value) => mutate('/profile/categories', { method: 'POST', body: JSON.stringify(value) }, 'Categoria adicionada.')} onUpdateCategory={(category, value) => mutate(`/profile/categories/${category.id}`, { method: 'PUT', body: JSON.stringify(value) }, 'Categoria atualizada.')} onDeleteCategory={(category) => mutate(`/profile/categories/${category.id}`, { method: 'DELETE' }, 'Categoria removida.')} />,
   };
 
   return <div className={busy ? 'loading' : ''}>
-    <Layout profile={profile} route={route} menuOpen={menuOpen} onMenu={setMenuOpen} onNavigate={navigate} onLogout={logout} onNewTask={openTask}>{pages[route]}</Layout>
-    {taskDialog !== undefined ? <TaskDialog task={taskDialog} categories={profile.categories} onClose={() => setTaskDialog(undefined)} onSave={saveTask} /> : null}
-    {historyDialog ? <HistoryDialog task={historyDialog} onClose={() => setHistoryDialog(null)} onSave={(value) => mutate('/profile/history', { method: 'POST', body: JSON.stringify(value) }, 'Tempo registrado.')} /> : null}
+    <Layout profile={profile} route={route} menuOpen={menuOpen} onMenu={setMenuOpen} onNavigate={navigate} onLogout={logout}>{pages[route]}</Layout>
     <Toasts items={toasts} />
   </div>;
 }

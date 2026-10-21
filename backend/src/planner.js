@@ -24,27 +24,25 @@ export async function recalculateAgenda(client, userId, weekStart) {
     WHERE user_id = $1 AND manual = FALSE AND starts_at >= $2 AND starts_at < $3
   `, [userId, start, end]);
 
-  const [tasksResult, availabilityResult, historyResult, manualResult] = await Promise.all([
-    client.query(`
+  const tasksResult = await client.query(`
       SELECT id, title, deadline, mode, duration_minutes, criticality, impact, fixed_start, fixed_end
       FROM tasks
       WHERE user_id = $1 AND status IN ('pending', 'ongoing') AND deadline >= $2
-    `, [userId, start]),
-    client.query(`
+    `, [userId, start]);
+  const availabilityResult = await client.query(`
       SELECT weekday, to_char(start_time, 'HH24:MI') AS start_time,
              to_char(end_time, 'HH24:MI') AS end_time
       FROM availability WHERE user_id = $1 ORDER BY weekday, start_time
-    `, [userId]),
-    client.query(`
+    `, [userId]);
+  const historyResult = await client.query(`
       SELECT task_id, COALESCE(SUM(duration_minutes), 0)::integer AS executed
       FROM task_history WHERE user_id = $1 GROUP BY task_id
-    `, [userId]),
-    client.query(`
+    `, [userId]);
+  const manualResult = await client.query(`
       SELECT id, task_id, starts_at, ends_at, status, manual
       FROM agenda_blocks
       WHERE user_id = $1 AND manual = TRUE AND starts_at >= $2 AND starts_at < $3
-    `, [userId, start, end]),
-  ]);
+    `, [userId, start, end]);
 
   const executedByTask = new Map(historyResult.rows.map((row) => [row.task_id, row.executed]));
   const blocks = [...manualResult.rows];
