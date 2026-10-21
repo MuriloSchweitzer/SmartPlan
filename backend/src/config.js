@@ -11,7 +11,7 @@ function required(name, minimumLength = 1) {
 export const config = {
   port: Number(process.env.PORT || 8080),
   nodeEnv: process.env.NODE_ENV || 'development',
-  databaseUrl: required('DATABASE_URL'),
+  databaseUrl: process.env.DATABASE_URL?.trim() || null,
   jwtSecret: required('JWT_SECRET', 32),
   frontendUrls: (process.env.FRONTEND_URL || 'http://localhost:5173')
     .split(',')

@@ -1,10 +1,17 @@
+import { getConnectionString } from '@netlify/database';
 import pg from 'pg';
 import { config } from './config.js';
 
-const useSsl = config.nodeEnv === 'production' && !config.databaseUrl.includes('localhost');
+const connectionString = process.env.NETLIFY_DB_URL || config.databaseUrl || getConnectionString();
+
+if (!connectionString) {
+  throw new Error('DATABASE_URL não configurado ou inválido.');
+}
+
+const useSsl = config.nodeEnv === 'production' && !connectionString.includes('localhost');
 
 export const pool = new pg.Pool({
-  connectionString: config.databaseUrl,
+  connectionString,
   ssl: useSsl ? { rejectUnauthorized: false } : undefined,
   max: 10,
   idleTimeoutMillis: 30_000,
