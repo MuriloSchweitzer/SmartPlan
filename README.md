@@ -1,58 +1,90 @@
 # SmartPlan
 
-SmartPlan é uma aplicação web de planejamento e gerenciamento de projetos, desenvolvida como um monorepo que integra backend robusto, frontend intuitivo e banco de dados centralizado.
+Aplicação web de planejamento inteligente do tempo. O sistema organiza tarefas fixas e flexíveis nos períodos livres do usuário, calcula prioridades, monta a agenda semanal e registra o tempo realmente utilizado.
 
-## 🎯 Sobre o Projeto
+## Arquitetura
 
-SmartPlan foi desenvolvido com o objetivo de fornecer uma solução completa e escalável para gerenciamento de tarefas e projetos. O projeto utiliza uma arquitetura moderna de monorepo, permitindo melhor organização do código, reutilização de componentes e facilidade na manutenção.
+```text
+SmartPlan/
+├── frontend/   React 19 + Vite
+├── backend/    API REST Node.js + Express
+├── database/   PostgreSQL: migrações e scripts
+└── docker-compose.yml
+```
 
-## 🛠️ Stack Tecnológica
+As três camadas são independentes:
 
-- **Backend**: C# com .NET Framework
-- **Frontend**: React com JavaScript/TypeScript
-- **Banco de Dados**: PostgreSQL
+```text
+Navegador (React) ──HTTPS──> API (Express) ──SQL──> PostgreSQL
+```
 
-## 🏗️ Arquitetura do Projeto
+- O frontend nunca acessa o banco diretamente.
+- O backend valida a sessão e garante que cada usuário acesse apenas seus dados.
+- O PostgreSQL mantém usuários, categorias, tarefas, disponibilidades, agenda e histórico em tabelas relacionais.
 
-O SmartPlan foi estruturado como um **monorepo**, que é um repositório único contendo múltiplos projetos relacionados. Esta abordagem permite:
+## Funcionalidades
 
-- Compartilhamento de código entre backend e frontend
-- Versionamento unificado de todo o projeto
-- Commits atômicos que garantem consistência entre módulos
-- Facilidade na colaboração entre times
+- Cadastro, login e alteração de senha com PBKDF2 e salt.
+- Categorias personalizadas por usuário.
+- Tarefas fixas e flexíveis com prazo, duração, criticidade e impacto.
+- Prioridade calculada por `0,4 × criticidade + 0,4 × urgência + 0,2 × impacto`.
+- Disponibilidade semanal recorrente.
+- Planejamento automático da agenda, preservando blocos manuais.
+- Registro de execução e comparação entre tempo estimado e tempo real.
+- Dashboard, agenda semanal, prioridades, histórico e configurações.
+- Layout responsivo para desktop e celular.
 
-### Estrutura de Diretórios
+## Execução local
 
-SmartPlan/ ├── backend/ │ ├── Controllers/ # Controladores HTTP da API │ ├── Models/ # Modelos de dados e entidades │ └── Services/ # Lógica de negócio e serviços │ 
-├── frontend/ │ └── src/ │ ├── components/ # Componentes React reutilizáveis │ ├── pages/ # Páginas da aplicação │ └── services/ # Serviços de comunicação com API │ 
-├── database/ │ ├── migrations/ # Scripts de migração PostgreSQL │ └── scripts/ # Scripts de inicialização e seed │ 
-├── README.md # Este arquivo └── .gitignore # Configuração de arquivos ignorados
+Pré-requisitos: Node.js 22+, npm e Docker.
 
+```powershell
+docker compose up -d postgres
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
+npm install
+npm run db:migrate
+npm run dev
+```
 
-## 📋 Como Estruturamos as Pastas com Git e GitHub
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8080`
+- Health check: `http://localhost:8080/api/health`
+- PostgreSQL: `localhost:5432`
 
-### Inicialização do Repositório
+Antes de usar fora do ambiente local, altere `JWT_SECRET` em `backend/.env`.
 
-O repositório SmartPlan foi criado e organizado utilizando Git e GitHub seguindo as melhores práticas de versionamento:
+## Testes e build
 
-1. **Criação da Estrutura Base**: Utilizamos comandos do terminal para criar a hierarquia de diretórios de forma organizada.
+```powershell
+npm test
+npm run lint
+npm run build
+```
 
-2. **Rastreamento com Git**: Cada diretório foi rastreado pelo Git através de arquivos `.gitkeep`, garantindo que pastas vazias sejam mantidas no repositório mesmo sem conteúdo inicial.
+## Hospedagem
 
-3. **Commits Estruturados**: Organizamos a estrutura em commits semânticos:
-   - Um commit para criar a estrutura de pastas
-   - Um commit para adicionar configurações iniciais (.gitignore, README.md)
-   - Commits subsequentes para adicionar código de cada módulo
+### Frontend
 
-4. **Repositório Centralizado**: O projeto está hospedado no GitHub em `github.com/USUARIO/SmartPlan`, permitindo:
-   - Controle de versão centralizado
-   - Colaboração entre desenvolvedores
-   - Histórico completo de mudanças
-   - Integração com CI/CD
+Use `frontend/` como diretório raiz na Vercel ou Netlify e configure:
 
-### Vantagens da Estrutura
+```text
+VITE_API_URL=https://sua-api.exemplo.com/api
+```
 
-- **Modularidade**: Cada seção (backend, frontend, database) é independente mas integrada
-- **Escalabilidade**: Fácil adicionar novos módulos mantendo a organização
-- **Rastreabilidade**: Cada mudança é registrada no histórico do Git
-- **Colaboração**: Múltiplos desenvolvedores podem trabalhar em paralelo
+### Backend
+
+Use `backend/` como diretório raiz em um serviço Node.js ou na Vercel. Configure:
+
+```text
+DATABASE_URL=postgresql://...
+JWT_SECRET=...
+FRONTEND_URL=https://seu-frontend.exemplo.com
+NODE_ENV=production
+```
+
+### PostgreSQL
+
+O banco pode ser hospedado em Neon, Supabase, Railway ou outro provedor PostgreSQL. Execute `npm run db:migrate` apontando `DATABASE_URL` para a instância criada.
+
+Consulte [docs/ARQUITETURA.md](docs/ARQUITETURA.md) para detalhes das camadas e regras de negócio.
